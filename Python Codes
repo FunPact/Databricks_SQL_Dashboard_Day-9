@@ -1,0 +1,67 @@
+# Day-9 with IDC Databricks AI Challenge
+
+##Adding Event_Date Column to Products Table
+import pandas as pd
+from pyspark.sql import functions as F
+from datetime import datetime, timedelta
+import random
+
+# Reading the Products Table
+products_df = spark.table('ecommerce.gold.products')
+
+# Getting the Number of Rows
+row_count = products_df.count()
+
+# Generating Random Dates in November 2019
+november_dates = [datetime(2019, 11, 1) + timedelta(days=i) for i in range(30)]
+random_dates = [random.choice(november_dates) for _ in range(row_count)]
+
+# Adding a Row_ID for Joining
+products_with_rowid = products_df.withColumn('row_id', F.monotonically_increasing_id())
+
+# Creating a DataFrame with Row_ID & Random Dates
+# Using the Existing Event_Date Column
+update_dates_df = spark.createDataFrame(
+      [(i, d.date()) for i, d in enumerate(random_dates)],
+      ['row_id', 'event_date']
+)
+
+# Joining to Assign Dates
+final_df = products_with_rowid.drop('event_date').join(update_dates_df, on='row_id', how='inner').drop('row_id')
+
+# Overwriting the Table with the Updated Event_Date Column
+final_df.write.mode('overwrite').option('overwriteSchema', 'true').saveAsTable('ecommerce.gold.products')
+
+
+##Revenue with 7-Day Moving Average
+%sql
+WITH daily AS (
+  SELECT event_date, SUM(revenue) as rev
+  FROM ecommerce.gold.products GROUP BY event_date
+)
+SELECT event_date, rev,
+  AVG(rev) OVER (ORDER BY event_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) as ma7
+FROM daily;
+
+
+## Product-Level Conversion Rate
+%sql
+SELECT product_id,
+  SUM(views) as views,
+  SUM(purchases) as purchases,
+  ROUND(try_divide(SUM(purchases)*100.0, SUM(views)), 2) as conversion_rate
+FROM ecommerce.gold.products
+GROUP BY product_id;
+
+
+## Customer Tier Analysis
+%sql
+SELECT
+  CASE WHEN cnt >= 10 THEN 'VIP'
+       WHEN cnt >= 5 THEN 'Loyal'
+       ELSE 'Regular' END as tier,
+  COUNT(*) as customers,
+  AVG(total_spent) as avg_ltv
+FROM (SELECT user_id, COUNT(*) cnt, SUM(price) total_spent
+      FROM workspace.default.events_table WHERE event_type='purchase' GROUP BY user_id)
+GROUP BY tier;
