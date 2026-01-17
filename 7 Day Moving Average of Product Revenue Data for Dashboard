@@ -1,0 +1,7 @@
+WITH daily AS (
+  SELECT event_date, SUM(revenue) as rev
+  FROM ecommerce.gold.products GROUP BY event_date
+)
+SELECT event_date, rev,
+  AVG(rev) OVER (ORDER BY event_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) as ma7
+FROM daily;
