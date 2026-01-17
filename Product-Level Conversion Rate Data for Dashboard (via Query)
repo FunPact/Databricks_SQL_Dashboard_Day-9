@@ -1,0 +1,6 @@
+SELECT product_id,
+  SUM(views) as views,
+  SUM(purchases) as purchases,
+  ROUND(try_divide(SUM(purchases)*100.0, SUM(views)), 2) as conversion_rate
+FROM ecommerce.gold.products
+GROUP BY product_id;
