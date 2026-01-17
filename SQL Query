@@ -1,0 +1,27 @@
+/*Revenue with 7-Day Moving Average*/
+WITH daily AS (
+  SELECT event_date, SUM(revenue) as rev
+  FROM ecommerce.gold.products GROUP BY event_date
+)
+SELECT event_date, rev,
+  AVG(rev) OVER (ORDER BY event_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) as ma7
+FROM daily;
+
+/*Product-Level Conversion Rate*/
+SELECT product_id,
+  SUM(views) as views,
+  SUM(purchases) as purchases,
+  ROUND(try_divide(SUM(purchases)*100.0, SUM(views)), 2) as conversion_rate
+FROM ecommerce.gold.products
+GROUP BY product_id;
+
+/*Customer Tier Analysis*/
+SELECT
+  CASE WHEN cnt >= 10 THEN 'VIP'
+       WHEN cnt >= 5 THEN 'Loyal'
+       ELSE 'Regular' END as tier,
+  COUNT(*) as customers,
+  AVG(total_spent) as avg_ltv
+FROM (SELECT user_id, COUNT(*) cnt, SUM(price) total_spent
+      FROM workspace.default.events_table WHERE event_type='purchase' GROUP BY user_id)
+GROUP BY tier;
